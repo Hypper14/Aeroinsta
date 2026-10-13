@@ -1,0 +1,65 @@
+name: Agente Autônomo de Postagem (Instagram & TikTok)
+
+on:
+  # Gatilho manual: permite rodar a qualquer momento pelo painel do GitHub Actions
+  workflow_dispatch:
+
+  # Gatilho agendado (Cron): Executa automaticamente nos horários definidos
+  # Exemplo: Todos os dias às 12:00 e 18:00 UTC (ajuste para o seu fuso horário)
+  schedule:
+    - cron: '0 12 * * *'
+    - cron: '0 18 * * *'
+
+# Permissão para gravar commits movendo os vídeos publicados para content/published/
+permissions:
+  contents: write
+
+jobs:
+  publicar_conteudo:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do Repositório
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configurar Ambiente Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Instalar Dependências
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Executar Agente de Postagem
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
+          INSTAGRAM_ACCOUNT_ID: ${{ secrets.INSTAGRAM_ACCOUNT_ID }}
+          INSTAGRAM_USERNAME: 'victorn_13'
+          TIKTOK_ACCESS_TOKEN: ${{ secrets.TIKTOK_ACCESS_TOKEN }}
+          CONTENT_DIR: 'content'
+          ARCHIVE_DIR: 'content/published'
+        run: |
+          python script_postagem.py
+
+      - name: Commitar e Salvar Arquivos Processados
+        if: success()
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Adiciona as alterações da pasta de conteúdo
+          git add content/
+          
+          # Verifica se houve arquivos arquivados para commitar
+          if git diff --staged --quiet; then
+            echo "Nenhum arquivo novo para arquivar."
+          else
+            git commit -m "chore: arquivar conteúdo publicado [skip ci]"
+            git push
+          fi
